@@ -2,6 +2,8 @@
 
 A cutting-edge web application that leverages AI and OCR technology to revolutionize receipt management and expense analysis. Built with a modern tech stack and best practices in software architecture.
 
+![SpendlyAI Screenshot](./image.png)
+
 ## 🚀 Key Technical Features
 
 - **Modern Frontend Architecture**
