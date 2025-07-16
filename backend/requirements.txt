@@ -1,0 +1,14 @@
+fastapi==0.109.2
+uvicorn==0.27.1
+python-dotenv==1.0.1
+chromadb==1.0.15
+openai==1.95.0
+pydantic==2.11.7
+langchain==0.3.26
+langchain-community==0.3.26
+langchain-core==0.3.68
+sentence-transformers==5.0.0
+pymongo==4.13.2
+torch==2.7.1
+torchvision==0.22.1
+python-doctr

@@ -1,80 +1,110 @@
-# AI-Powered Mobile Receipt Assistant
+# SpendlyAI - Modern Receipt Management & Analysis Platform
 
-A Flutter mobile application that helps users track and analyze their expenses using AI and OCR technology.
+A cutting-edge web application that leverages AI and OCR technology to revolutionize receipt management and expense analysis. Built with a modern tech stack and best practices in software architecture.
 
-## Features
+## 🚀 Key Technical Features
 
-- 📸 Capture receipts using the device camera
-- 🔍 Automatic text extraction using OCR
-- 🤖 AI-powered expense analysis and categorization
-- 💬 Natural language queries about expenses
-- 📊 View and manage expense history
-- 📤 Export data to JSON/CSV
-- 🌐 Support for English and Arabic
+- **Modern Frontend Architecture**
+  - Built with React + TypeScript + Vite for optimal performance
+  - State management with TanStack Query
+  - Elegant UI with Tailwind CSS, Radix UI, and Framer Motion animations
+  - Real-time updates using WebSocket connections
+  - Component-driven development
 
-## Setup Instructions
+- **Powerful Backend Infrastructure**
+  - FastAPI for high-performance async API endpoints
+  - ChromaDB for vector storage and semantic search capabilities
+  - LangChain for dynamic memory
+  - MongoDB integration for data storage
+  - OCR powered by DocTR (Document Text Recognition)
+
+- **AI/ML Capabilities**
+  - OpenAI integration for intelligent receipt analysis
+  - Advanced OCR with DocTR for accurate text extraction
+  - RAG (Retrieval Augmented Generation) for context-aware responses
+  - Intelligent categorization and pattern recognition
+  - Continuous learning from user interactions
+
+- **Developer Experience**
+  - Type-safe development with TypeScript
+  - Modern build system with Vite
+  - Query management with TanStack Query
+  - Utility-first styling with Tailwind CSS
+  - Comprehensive ESLint configuration
+
+## Architecture
+
+The project follows a modern microservices architecture:
+
+```
+frontend/                 # React + TypeScript frontend
+  ├── src/
+  │   ├── api/           # API integration layer
+  │   ├── components/    # Reusable UI components
+  │   ├── pages/        # Page components
+  │   └── lib/          # Utility functions
+  
+backend/                  # FastAPI + Python backend
+  ├── app/
+  │   ├── llm_service.py   # AI/ML processing
+  │   ├── rag_service.py   # RAG implementation
+  │   └── memory_service.py # Chat history management
+```
+
+## 🛠️ Tech Stack
+
+### Frontend
+- React
+- TypeScript
+- Vite
+- TanStack Query
+- Tailwind CSS
+- Radix UI
+- Framer Motion
+
+### Backend
+- FastAPI
+- ChromaDB
+- LangChain
+- MongoDB
+- DocTR
+- OpenAI
+- Python
+
+## 🚀 Getting Started
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/receipt-assistant.git
-   cd receipt-assistant
+   git clone https://github.com/createdbyadham/spendlyai.git
+   cd spendlyai
    ```
 
-2. Install dependencies:
+2. Install frontend dependencies:
    ```bash
-   flutter pub get
+   cd frontend
+   npm install
    ```
 
-3. Create a `.env` file in the root directory and add your OpenAI API key:
-   ```
-   OPENAI_API_KEY=your_api_key_here
-   ```
-
-4. Run the app:
+3. Install backend dependencies:
    ```bash
-   flutter run
+   cd backend
+   pip install -r requirements.txt
    ```
 
-## Required Permissions
+4. Set up environment variables:
+   ```bash
+   # Create .env in project root
+   OPENAI_API_KEY=your_key_here
+   MONGODB_URI=your_mongodb_uri
+   ```
 
-The app requires the following permissions:
-- Camera access for capturing receipts
-- Storage access for saving images and exported data
+5. Start the development servers:
+   ```bash
+   # Terminal 1 - Frontend
+   cd frontend
+   npm run dev
 
-## Dependencies
-
-- Flutter SDK
-- Google ML Kit for OCR
-- OpenAI API for AI features
-- SQLite for local storage
-- Various Flutter packages (see pubspec.yaml)
-
-## Project Structure
-
-```
-lib/
-  ├── models/         # Data models
-  ├── screens/        # UI screens
-  ├── services/       # Business logic and external services
-  └── main.dart       # App entry point
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Flutter team for the amazing framework
-- OpenAI for the GPT API
-- Google ML Kit for OCR capabilities
-# hopntask
-"# SpendlyAI" 
+   # Terminal 2 - Backend
+   cd backend
+   python -m uvicorn app.main:app --reload
+   ```
