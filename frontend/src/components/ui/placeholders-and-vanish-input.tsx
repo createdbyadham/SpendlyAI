@@ -111,14 +111,18 @@ export function PlaceholdersAndVanishInput({
   }, [value, draw]);
 
   const animate = (start: number) => {
-    // Add a safety timeout to reset animation state after 3 seconds
+    let animationFrameId: number;
     const safetyTimeout = setTimeout(() => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
       setAnimating(false);
       setValue("");
+      newDataRef.current = [];
     }, 3000);
 
     const animateFrame = (pos: number = 0) => {
-      requestAnimationFrame(() => {
+      animationFrameId = requestAnimationFrame(() => {
         try {
           const newArr = [];
           for (let i = 0; i < newDataRef.current.length; i++) {
@@ -131,7 +135,6 @@ export function PlaceholdersAndVanishInput({
                 continue;
               }
               current.x += Math.random() > 0.5 ? 1 : -1;
-              current.y += Math.random() > 0.5 ? 1 : -1;
               current.r -= 0.05 * Math.random();
               newArr.push(current);
             }
@@ -157,25 +160,50 @@ export function PlaceholdersAndVanishInput({
             setValue("");
             setAnimating(false);
             clearTimeout(safetyTimeout);
+            if (animationFrameId) {
+              cancelAnimationFrame(animationFrameId);
+            }
           }
         } catch (error) {
           console.error('Animation error:', error);
           setValue("");
           setAnimating(false);
+          newDataRef.current = [];
           clearTimeout(safetyTimeout);
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+          }
         }
       });
     };
     animateFrame(start);
+
+    // Cleanup function
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      clearTimeout(safetyTimeout);
+    };
   };
 
-  // Add cleanup for animation state when component unmounts
+  // Add cleanup for animation state when component unmounts or updates
   useEffect(() => {
     return () => {
       setAnimating(false);
       setValue("");
+      newDataRef.current = [];
     };
   }, []);
+
+  // Add blur handler to reset states
+  const handleBlur = () => {
+    if (animating) {
+      setAnimating(false);
+      setValue("");
+      newDataRef.current = [];
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !animating) {
@@ -185,6 +213,7 @@ export function PlaceholdersAndVanishInput({
     if (e.key === "Escape") {
       setAnimating(false);
       setValue("");
+      newDataRef.current = [];
     }
   };
 
@@ -294,6 +323,7 @@ export function PlaceholdersAndVanishInput({
           }
         }}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         ref={inputRef}
         value={value}
         type="text"
