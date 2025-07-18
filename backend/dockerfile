@@ -1,0 +1,46 @@
+# Use a cache mount to store downloaded models
+FROM python:3.10-slim AS model-downloader
+WORKDIR /app
+
+# Install build dependencies and OpenGL libraries
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install requirements
+COPY requirements.txt .
+
+# Download all models with cache mounts
+RUN --mount=type=cache,target=/root/.cache/torch \
+    --mount=type=cache,target=/root/.cache/doctr \
+    --mount=type=cache,target=/root/.cache/huggingface \
+    --mount=type=cache,target=/root/.cache/sentence_transformers \
+    pip install --no-cache-dir -r requirements.txt && \
+    python -c "from doctr.models import ocr_predictor; model = ocr_predictor(det_arch='db_resnet50', reco_arch='crnn_vgg16_bn', pretrained=True)" && \
+    python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Final stage
+FROM python:3.10-slim
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+COPY --from=model-downloader /root/.cache /root/.cache
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Expose FastAPI port
+EXPOSE 8000
+
+# Start FastAPI app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

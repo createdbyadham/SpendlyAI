@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing and Coverage
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+htmlcov/
+
+# IDE and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Version Control
+.git/
+.gitignore
+.gitattributes
+
+# Logs and Env Files
+*.log
+
+# Project Specific
+chroma_store/
+data/
+uploads/
+tmp/
+README.md
+LICENSE
+*.md
+
+# Docker (Optional)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Miscellaneous
+*.sqlite
+*.sqlite3
+*.db
