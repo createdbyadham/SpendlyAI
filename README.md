@@ -34,6 +34,13 @@ A cutting-edge web application that leverages AI and OCR technology to revolutio
   - Utility-first styling with Tailwind CSS
   - Comprehensive ESLint configuration
 
+- **Docker Support**
+  - Multi-stage builds for optimized container sizes
+  - Persistent volumes for ML models and ChromaDB
+  - Containerized development and production environments
+  - Docker Compose for easy orchestration
+  - Hot-reload support in development
+
 ## Architecture
 
 The project follows a modern microservices architecture:
@@ -73,7 +80,15 @@ backend/                  # FastAPI + Python backend
 - OpenAI
 - Python
 
+### Infrastructure
+- Docker
+- Docker Compose
+- Persistent Volumes
+- Multi-stage Builds
+
 ## 🚀 Getting Started
+
+### Local Development
 
 1. Clone the repository:
    ```bash
@@ -110,3 +125,35 @@ backend/                  # FastAPI + Python backend
    cd backend
    python -m uvicorn app.main:app --reload
    ```
+
+### Docker Deployment
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/createdbyadham/spendlyai.git
+   cd spendlyai
+   ```
+
+2. Set up environment variables:
+   ```bash
+   # Create backend/.env file with required variables
+   OPENAI_API_KEY=your_key_here
+   MONGODB_URI=your_mongodb_uri
+   ```
+
+3. Build and start the containers:
+   ```bash
+   docker compose up --build
+   ```
+
+The application will be available at:
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+
+### Docker Volumes
+
+The application uses two persistent volumes:
+- `model-cache`: Stores downloaded ML models
+- `chroma-data`: Stores ChromaDB vector database
+
+These volumes persist data across container restarts and rebuilds.
