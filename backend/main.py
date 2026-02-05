@@ -101,22 +101,48 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         total = None
         business_name = text_lines[0] if text_lines else "Unknown Business"  # First line is usually business name
         
-        for line in text_lines:
+        import re
+        
+        for i, line in enumerate(text_lines):
+            line_lower = line.lower().strip()
+            
             # Look for date in common formats
-            if any(date_indicator in line.lower() for date_indicator in ["date:", "date", "-20", "/20"]):
-                date = line
-            # Look for total amount
-            if "total:" in line.lower():
-                total = line
+            if date is None:
+                # Check for date patterns like MM/DD/YYYY, DD-MM-YYYY, etc.
+                date_patterns = [
+                    r'\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}',  # MM/DD/YYYY or DD-MM-YYYY
+                    r'\d{4}[/\-\.]\d{1,2}[/\-\.]\d{1,2}',    # YYYY-MM-DD
+                ]
+                for pattern in date_patterns:
+                    match = re.search(pattern, line)
+                    if match:
+                        date = match.group()
+                        break
+                if date is None and any(ind in line_lower for ind in ["date:", "date "]):
+                    date = line
+            
+            # Look for total amount - check if "total" is on this line
+            if total is None and "total" in line_lower and "subtotal" not in line_lower:
+                # Try to find a number on the same line
+                numbers = re.findall(r'[\d]+\.[\d]+|[\d]+', line)
+                if numbers:
+                    # Get the last number on the line (usually the total value)
+                    total = numbers[-1]
+                elif i + 1 < len(text_lines):
+                    # Check the next line for a number
+                    next_line = text_lines[i + 1]
+                    numbers = re.findall(r'[\d]+\.[\d]+|[\d]+', next_line)
+                    if numbers:
+                        total = numbers[0]
 
-        # Store in ChromaDB with metadata
+        # Store in ChromaDB with metadata (ChromaDB doesn't accept None values)
         rag_service.collection.add(
             documents=[full_text],
             metadatas=[{
                 "source": "receipt_ocr",
                 "business_name": business_name,
-                "date": date,
-                "total": total,
+                "date": date if date else "Unknown",
+                "total": total if total else "Unknown",
                 "timestamp": datetime.now().isoformat()
             }],
             ids=[f"receipt_{datetime.now().timestamp()}"]
@@ -127,8 +153,8 @@ async def ocr_endpoint(file: UploadFile = File(...)):
             "text_lines": text_lines,
             "metadata": {
                 "business_name": business_name,
-                "date": date,
-                "total": total
+                "date": date if date else "Not detected",
+                "total": total if total else "Not detected"
             }
         })
         

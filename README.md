@@ -123,7 +123,7 @@ backend/                  # FastAPI + Python backend
 
    # Terminal 2 - Backend
    cd backend
-   python -m uvicorn app.main:app --reload
+   python -m uvicorn main:app --reload
    ```
 
 ### Docker Deployment
