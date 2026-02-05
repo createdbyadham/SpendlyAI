@@ -1,6 +1,5 @@
 import os
-import cv2
-import numpy as np
+import tempfile
 from paddleocr import PaddleOCR
 import instructor
 from openai import OpenAI
@@ -23,15 +22,12 @@ class ReceiptData(BaseModel):
 
 class OCRService:
     def __init__(self):
-        # Initialize PaddleOCR
-        # Using configuration for PaddleOCR v3/v5
-        # use_doc_orientation_classify=True enables document orientation classification
-        # use_textline_orientation=True enables textline orientation classification (good for wild scenarios)
-        # Note: use_gpu is determined by the installed paddlepaddle version (cpu vs gpu), not passed as arg in v3
+        # Initialize PaddleOCR following 3.x documentation
+        # https://paddlepaddle.github.io/PaddleOCR/main/en/version3.x/pipeline_usage/OCR.html
         self.ocr = PaddleOCR(
-            use_doc_orientation_classify=True,
+            use_doc_orientation_classify=False,
             use_doc_unwarping=False,
-            use_textline_orientation=True,
+            use_textline_orientation=False,
             lang='en'
         )
         
@@ -45,73 +41,87 @@ class OCRService:
             
         self.client = instructor.from_openai(OpenAI(api_key=api_key, base_url=base_url))
 
+    def _detect_image_suffix(self, image_bytes: bytes) -> str:
+        """Detect image format from magic bytes and return appropriate file suffix."""
+        if image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            return ".png"
+        elif image_bytes[:2] == b'\xff\xd8':
+            return ".jpg"
+        elif image_bytes[:4] == b'RIFF' and image_bytes[8:12] == b'WEBP':
+            return ".webp"
+        elif image_bytes[:3] == b'GIF':
+            return ".gif"
+        elif image_bytes[:4] == b'%PDF':
+            return ".pdf"
+        elif image_bytes[:2] == b'BM':
+            return ".bmp"
+        return ".jpg"  # default fallback
+
     def extract_text_from_bytes(self, image_bytes: bytes) -> str:
-        # Save to temp file as PaddleOCR predicts from path
-        import tempfile
-        import os
+        if not image_bytes:
+            logging.warning("Empty image bytes received")
+            return ""
         
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
-            temp_file.write(image_bytes)
-            temp_file_path = temp_file.name
-            
+        # Detect actual image format for correct temp file extension
+        suffix = self._detect_image_suffix(image_bytes)
+        logging.info(f"Detected image format: {suffix} ({len(image_bytes)} bytes)")
+        
+        # Create a temp file to store the image
+        fd, temp_file_path = tempfile.mkstemp(suffix=suffix)
         try:
-            # Use the predict method as per new docs (v3/v5)
-            # result is a list of objects
-            results = self.ocr.predict(temp_file_path)
+            with os.fdopen(fd, 'wb') as temp_file:
+                temp_file.write(image_bytes)
+            
+            logging.info(f"Processing image at {temp_file_path}")
+            
+            # Use predict() method per PaddleOCR 3.x docs
+            result = self.ocr.predict(temp_file_path)
             
             all_text_lines = []
             
-            # Iterate through results (usually one per page/image)
-            for res in results:
-                # The result object has a 'res' attribute which is a dictionary (or it behaves like one?)
-                # Based on docs example output: {'res': {'rec_texts': [...], ...}}
-                # Use .res attribute if available, or try dict access
-                if hasattr(res, 'res') and isinstance(res.res, dict):
-                     rec_texts = res.res.get('rec_texts', [])
-                     if rec_texts:
-                         all_text_lines.extend(rec_texts)
-                elif isinstance(res, dict) and 'res' in res:
-                     rec_texts = res['res'].get('rec_texts', [])
-                     if rec_texts:
-                         all_text_lines.extend(rec_texts)
-                else:
-                    # Fallback for older versions or unexpected structure
-                    # Try to inspect structure if needed, or assume it might be the old list of tuples
-                    # But since we use predict(), we expect the new structure.
-                    # Let's try to be safe.
-                    try:
-                        # Some versions might return just the list if not full structure
-                        pass 
-                    except:
-                        pass
-
+            for res in result:
+                # The result object has a .json property returning a dict
+                res_json = res.json
+                
+                # Handle string JSON (parse it if needed)
+                if isinstance(res_json, str):
+                    import json
+                    res_json = json.loads(res_json)
+                
+                # Find rec_texts - may be at top level or nested under 'res' key
+                rec_texts = []
+                if isinstance(res_json, dict):
+                    if 'rec_texts' in res_json:
+                        rec_texts = res_json['rec_texts']
+                    elif 'res' in res_json and isinstance(res_json['res'], dict):
+                        rec_texts = res_json['res'].get('rec_texts', [])
+                
+                all_text_lines.extend(rec_texts)
+                
             raw_text = "\n".join(all_text_lines)
+            logging.info(f"Extracted {len(all_text_lines)} lines total, {len(raw_text)} chars")
             return raw_text
-            
+
         except Exception as e:
-            logging.error(f"OCR extraction failed: {e}")
-            # Fallback to legacy .ocr() method if predict() fails or returns unexpected format
+            logging.error(f"OCR extraction failed: {e}", exc_info=True)
+            raise e
+        finally:
+            # Clean up temp file
             try:
-                logging.info("Falling back to legacy ocr() method")
-                result = self.ocr.ocr(temp_file_path, cls=True)
-                if result and result[0]:
-                    return "\n".join([line[1][0] for line in result[0]])
-                return ""
-            except Exception as e2:
-                 logging.error(f"Legacy OCR failed too: {e2}")
-                 raise e
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+            except Exception as e:
+                logging.error(f"Failed to cleanup temp file: {e}")
 
     def parse_receipt(self, raw_text: str) -> ReceiptData:
-        system_prompt = """
-        You are a receipt parsing engine. You will receive raw, messy text extracted from a receipt by an OCR engine. 
-        Your job is to extract specific fields and return them in strict JSON format.
+        # Validate text content to avoid sending garbage to LLM
+        # "n\na\no..." suggests less than 20 chars of meaningful text usually isn't a receipt
+        if not raw_text or len(raw_text.strip()) < 10:
+            logging.warning(f"Raw text too short or empty ({len(raw_text) if raw_text else 0} chars), skipping LLM parsing")
+            return ReceiptData()
 
-        Rules:
-        1. Correct common OCR errors (e.g., if you see "Subtota1", treat it as "Subtotal").
-        2. If the Merchant Name is not explicit, infer it from the header or logo text.
-        3. Date format must be ISO 8601 (YYYY-MM-DD).
-        4. Return "null" for missing fields. Do NOT make up data.
-        """
+        # Extremely simplified prompt to avoid "jailbreak" detection on weird inputs
+        system_prompt = "Extract merchant, date, total, tax, and items from this receipt text into JSON."
 
         try:
             receipt_data = self.client.chat.completions.create(

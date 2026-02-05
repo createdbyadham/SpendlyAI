@@ -72,7 +72,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         # Read the uploaded image file
         image_bytes = await file.read()
         
-        # Run OCR using the new service
+        # Run OCR using the ocr_service.py
         raw_text = ocr_service.extract_text_from_bytes(image_bytes)
         
         # Parse with LLM
@@ -84,17 +84,20 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         total = parsed_data.total if parsed_data.total else 0.0
         
         # Store in ChromaDB with metadata
-        rag_service.collection.add(
-            documents=[raw_text],
-            metadatas=[{
-                "source": "receipt_ocr",
-                "business_name": business_name,
-                "date": date,
-                "total": total,
-                "timestamp": datetime.now().isoformat()
-            }],
-            ids=[f"receipt_{datetime.now().timestamp()}"]
-        )
+        if raw_text and raw_text.strip():
+            rag_service.collection.add(
+                documents=[raw_text],
+                metadatas=[{
+                    "source": "receipt_ocr",
+                    "business_name": business_name,
+                    "date": date,
+                    "total": total,
+                    "timestamp": datetime.now().isoformat()
+                }],
+                ids=[f"receipt_{datetime.now().timestamp()}"]
+            )
+        else:
+            logging.warning("Skipping RAG storage for receipt with empty text")
         
         return JSONResponse(content={
             "status": "success",

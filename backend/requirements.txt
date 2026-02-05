@@ -11,7 +11,6 @@ pymongo==4.13.2
 
 # ML/AI dependencies
 openai==1.95.0
-pydantic==2.11.7
 langchain==0.3.26
 langchain-community==0.3.26
 langchain-core==0.3.68
@@ -19,8 +18,8 @@ sentence-transformers==5.0.0
 
 # Use CPU-only version of PyTorch to reduce size
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.7.1+cpu
-torchvision==0.22.1+cpu
 
-# OCR
-python-doctr[torch]
+# PaddleOCR 3.x (basic OCR, no need for [all])
+paddlepaddle==3.2.0
+paddleocr
+instructor>=1.0.0
