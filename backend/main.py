@@ -7,12 +7,10 @@ from dotenv import load_dotenv
 from llm_service import ReceiptAssistant
 from rag_service import RAGService
 from memory_service import memory
+from ocr_service import OCRService
 from datetime import datetime
-from doctr.io import DocumentFile
-from doctr.models import ocr_predictor
 import logging
 from pymongo import MongoClient
-from pydantic import BaseModel, ValidationError
 import os
 
 
@@ -21,13 +19,14 @@ load_dotenv()
 app = FastAPI()
 rag_service = RAGService()
 ai = ReceiptAssistant(rag_service=rag_service)
+ocr_service = OCRService()
+
 MONGODB_URI = os.getenv("MONGODB_URI")
 if not MONGODB_URI:
     raise RuntimeError("MONGODB_URI environment variable is not set")
 client = MongoClient(MONGODB_URI)
 db = client["receipts_db"]
 receipts_collection = db["receipts"]
-ocr_model = ocr_predictor(det_arch='db_resnet50', reco_arch='crnn_vgg16_bn', pretrained=True)
 
 # Validate services on startup
 @app.on_event("startup")
@@ -59,90 +58,39 @@ class ReceiptChatRequest(BaseModel):
 class ReceiptChatResponse(BaseModel):
     response: str
 
-class ReceiptData(BaseModel):
+# Model for storing receipts (keeping existing structure for compatibility)
+class StoreReceiptRequest(BaseModel):
     title: str
     total: float
     date: str
     items: list[dict]
     raw_text: str
 
-def extract_raw_text(ocr_output):
-    text_lines = []
-    
-    for page in ocr_output["pages"]:
-        for block in page["blocks"]:
-            for line in block["lines"]:
-                line_text = " ".join(word["value"] for word in line["words"])
-                if line_text.strip():  # Only add non-empty lines
-                    text_lines.append(line_text)
-    
-    return text_lines
-
 @app.post("/ocr/")
 async def ocr_endpoint(file: UploadFile = File(...)):
     try:
         # Read the uploaded image file
         image_bytes = await file.read()
-        img = DocumentFile.from_images([image_bytes])
-
-        # Run OCR
-        result = ocr_model(img)
-        ocr_output = result.export()
         
-        # Extract the text lines
-        text_lines = extract_raw_text(ocr_output)
+        # Run OCR using the new service
+        raw_text = ocr_service.extract_text_from_bytes(image_bytes)
         
-        # Combine all lines into a single text document
-        full_text = "\n".join(text_lines)
+        # Parse with LLM
+        parsed_data = ocr_service.parse_receipt(raw_text)
         
-        # Extract basic metadata from the text
-        # Try to find date and total amount
-        date = None
-        total = None
-        business_name = text_lines[0] if text_lines else "Unknown Business"  # First line is usually business name
+        # Prepare metadata for ChromaDB
+        business_name = parsed_data.merchant if parsed_data.merchant else "Unknown Business"
+        date = parsed_data.date if parsed_data.date else "Unknown"
+        total = parsed_data.total if parsed_data.total else 0.0
         
-        import re
-        
-        for i, line in enumerate(text_lines):
-            line_lower = line.lower().strip()
-            
-            # Look for date in common formats
-            if date is None:
-                # Check for date patterns like MM/DD/YYYY, DD-MM-YYYY, etc.
-                date_patterns = [
-                    r'\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}',  # MM/DD/YYYY or DD-MM-YYYY
-                    r'\d{4}[/\-\.]\d{1,2}[/\-\.]\d{1,2}',    # YYYY-MM-DD
-                ]
-                for pattern in date_patterns:
-                    match = re.search(pattern, line)
-                    if match:
-                        date = match.group()
-                        break
-                if date is None and any(ind in line_lower for ind in ["date:", "date "]):
-                    date = line
-            
-            # Look for total amount - check if "total" is on this line
-            if total is None and "total" in line_lower and "subtotal" not in line_lower:
-                # Try to find a number on the same line
-                numbers = re.findall(r'[\d]+\.[\d]+|[\d]+', line)
-                if numbers:
-                    # Get the last number on the line (usually the total value)
-                    total = numbers[-1]
-                elif i + 1 < len(text_lines):
-                    # Check the next line for a number
-                    next_line = text_lines[i + 1]
-                    numbers = re.findall(r'[\d]+\.[\d]+|[\d]+', next_line)
-                    if numbers:
-                        total = numbers[0]
-
-        # Store in ChromaDB with metadata (ChromaDB doesn't accept None values)
+        # Store in ChromaDB with metadata
         rag_service.collection.add(
-            documents=[full_text],
+            documents=[raw_text],
             metadatas=[{
                 "source": "receipt_ocr",
                 "business_name": business_name,
-                "date": date if date else "Unknown",
-                "total": total if total else "Unknown",
+                "date": date,
+                "total": total,
                 "timestamp": datetime.now().isoformat()
             }],
             ids=[f"receipt_{datetime.now().timestamp()}"]
@@ -150,12 +98,8 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         
         return JSONResponse(content={
             "status": "success",
-            "text_lines": text_lines,
-            "metadata": {
-                "business_name": business_name,
-                "date": date if date else "Not detected",
-                "total": total if total else "Not detected"
-            }
+            "data": parsed_data.model_dump(),
+            "raw_text": raw_text
         })
         
     except Exception as e:
@@ -171,7 +115,7 @@ async def receipt_chat(request: ReceiptChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/receipts/store")
-async def store_receipt(receipt: ReceiptData):
+async def store_receipt(receipt: StoreReceiptRequest):
     try:
         logging.info(f"Processing receipt store request for {receipt.title}")
         # Use RAGService instance
@@ -184,7 +128,7 @@ Date: {receipt.date}
 Total: ${receipt.total:.2f}
 
 Items:
-{chr(10).join([f"- {item['name']}: ${item['price']}" for item in receipt.items])}
+{chr(10).join([f"- {item.get('name', item.get('desc', 'Item'))}: ${item.get('price', 0)}" for item in receipt.items])}
 
 Raw OCR Text:
 {receipt.raw_text}
@@ -246,4 +190,4 @@ async def shutdown_services():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
