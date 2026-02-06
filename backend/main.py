@@ -78,20 +78,38 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         # Parse with LLM
         parsed_data = ocr_service.parse_receipt(raw_text)
         
-        # Prepare metadata for ChromaDB
-        business_name = parsed_data.merchant if parsed_data.merchant else "Unknown Business"
+        # Prepare structured document for ChromaDB (not raw OCR text)
+        # This gives the RAG system clean, searchable content
+        merchant_name = parsed_data.merchant if parsed_data.merchant else "Unknown Business"
         date = parsed_data.date if parsed_data.date else "Unknown"
         total = parsed_data.total if parsed_data.total else 0.0
+        tax = parsed_data.tax if parsed_data.tax else 0.0
+        
+        items_text = "\n".join(
+            [f"- {item.desc}: ${item.price:.2f} (qty: {item.qty})"
+             for item in parsed_data.items]
+        ) if parsed_data.items else "No items extracted"
+        
+        structured_doc = (
+            f"Receipt from: {merchant_name}\n"
+            f"Date: {date}\n"
+            f"Total: ${total:.2f}\n"
+            f"Tax: ${tax:.2f}\n\n"
+            f"Items:\n{items_text}"
+        )
         
         # Store in ChromaDB with metadata
+        # Uses "title" key to match rag_service.get_relevant_context() lookups
         if raw_text and raw_text.strip():
             rag_service.collection.add(
-                documents=[raw_text],
+                documents=[structured_doc],
                 metadatas=[{
                     "source": "receipt_ocr",
-                    "business_name": business_name,
+                    "title": merchant_name,
                     "date": date,
                     "total": total,
+                    "tax": tax,
+                    "item_count": len(parsed_data.items),
                     "timestamp": datetime.now().isoformat()
                 }],
                 ids=[f"receipt_{datetime.now().timestamp()}"]

@@ -3,22 +3,52 @@ import tempfile
 from paddleocr import PaddleOCR
 import instructor
 from openai import OpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 import logging
+import re
 
-# Define the Pydantic models for the receipt
+# Define the Pydantic models for the receipt with validation
 class ReceiptItem(BaseModel):
     desc: str = Field(..., description="Description of the item")
-    qty: float = Field(..., description="Quantity of the item")
-    price: float = Field(..., description="Price of the item")
+    qty: float = Field(..., description="Quantity of the item", ge=0)
+    price: float = Field(..., description="Unit price of the item", ge=0)
+
+    @field_validator('desc')
+    @classmethod
+    def clean_description(cls, v: str) -> str:
+        """Strip whitespace and ensure non-empty."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Item description cannot be empty")
+        return v
 
 class ReceiptData(BaseModel):
-    merchant: Optional[str] = Field(None, description="Name of the merchant")
+    merchant: Optional[str] = Field(None, description="Name of the merchant/store")
     date: Optional[str] = Field(None, description="Date of the receipt in YYYY-MM-DD format")
-    total: Optional[float] = Field(None, description="Total amount of the receipt")
-    tax: Optional[float] = Field(None, description="Tax amount")
+    total: Optional[float] = Field(None, description="Final total amount on the receipt", ge=0)
+    tax: Optional[float] = Field(None, description="Tax amount", ge=0)
     items: List[ReceiptItem] = Field(default_factory=list, description="List of items in the receipt")
+
+    @field_validator('date')
+    @classmethod
+    def validate_date_format(cls, v: Optional[str]) -> Optional[str]:
+        """Ensure date is in YYYY-MM-DD format if provided."""
+        if v is None:
+            return v
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', v):
+            raise ValueError("Date must be in YYYY-MM-DD format")
+        return v
+
+    @field_validator('merchant')
+    @classmethod
+    def clean_merchant(cls, v: Optional[str]) -> Optional[str]:
+        """Strip whitespace from merchant name."""
+        if v is not None:
+            v = v.strip()
+            if not v:
+                return None
+        return v
 
 class OCRService:
     def __init__(self):
@@ -114,19 +144,30 @@ class OCRService:
                 logging.error(f"Failed to cleanup temp file: {e}")
 
     def parse_receipt(self, raw_text: str) -> ReceiptData:
-        # Validate text content to avoid sending garbage to LLM
-        # "n\na\no..." suggests less than 20 chars of meaningful text usually isn't a receipt
+        """Parse raw OCR text into structured receipt data using LLM."""
         if not raw_text or len(raw_text.strip()) < 10:
             logging.warning(f"Raw text too short or empty ({len(raw_text) if raw_text else 0} chars), skipping LLM parsing")
             return ReceiptData()
 
-        # Extremely simplified prompt to avoid "jailbreak" detection on weird inputs
-        system_prompt = "Extract merchant, date, total, tax, and items from this receipt text into JSON."
+        system_prompt = (
+            "You are a receipt parser. Extract structured data from the OCR text of a receipt.\n"
+            "Rules:\n"
+            "- merchant: The store/business name (first line is usually the store name).\n"
+            "- date: Convert to YYYY-MM-DD format.\n"
+            "- total: The final TOTAL amount paid (after tax), not the subtotal.\n"
+            "- tax: The tax amount. Use 0 if not listed.\n"
+            "- items: Each purchased item with description, quantity (default 1), and unit price.\n"
+            "- Do NOT include subtotal, total, or tax as items.\n"
+            "- Fix obvious OCR errors in item names (e.g., '0' that should be 'O', 'l' that should 'I').\n"
+            "- If a field cannot be determined, use null."
+        )
 
         try:
             receipt_data = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 response_model=ReceiptData,
+                temperature=0,
+                max_retries=2,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": raw_text}
@@ -135,5 +176,4 @@ class OCRService:
             return receipt_data
         except Exception as e:
             logging.error(f"Error parsing receipt with LLM: {e}")
-            # Return empty structure on failure
             return ReceiptData()
