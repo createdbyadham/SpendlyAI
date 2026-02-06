@@ -1,8 +1,8 @@
-# SpendlyAI - Modern Receipt Management & Analysis Platform
+# Trace - Modern Receipt Management & Analysis Platform
 
 A cutting-edge web application that leverages AI and OCR technology to revolutionize receipt management and expense analysis. Built with a modern tech stack and best practices in software architecture.
 
-![SpendlyAI Screenshot](./image.png)
+![Trace Screenshot](./image.png)
 
 ## 🚀 Key Technical Features
 
@@ -92,8 +92,8 @@ backend/                  # FastAPI + Python backend
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/createdbyadham/spendlyai.git
-   cd spendlyai
+   git clone https://github.com/createdbyadham/Trace.git
+   cd Trace
    ```
 
 2. Install frontend dependencies:
@@ -130,8 +130,8 @@ backend/                  # FastAPI + Python backend
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/createdbyadham/spendlyai.git
-   cd spendlyai
+   git clone https://github.com/createdbyadham/Trace.git
+   cd Trace
    ```
 
 2. Set up environment variables:

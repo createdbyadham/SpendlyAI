@@ -11,6 +11,7 @@ import { parseReceipt, type ScanResponse, type ParseResponse } from "@/api/ocr";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import Logo from "../../../Tracelogo.png"
 
 interface Message {
   content: string;
@@ -22,11 +23,9 @@ interface ScanState {
   scanResult: ScanResponse;
 }
 
-// Spendly Logo Icon Component
-const SpendlyIcon = ({ className = "" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
-  </svg>
+// Trace Logo Icon Component
+const TraceIcon = ({ className = "" }: { className?: string }) => (
+  <img src={Logo} alt="Trace Logo" className={className} />
 );
 
 export function ChatPage() {
@@ -130,10 +129,10 @@ export function ChatPage() {
         {/* Header */}
         <header className="flex items-center justify-between px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-              <SpendlyIcon className="w-5 h-5 text-[#0d1117]" />
+            <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+              <TraceIcon className="w-6 h-6 text-[#0d1117]" />
             </div>
-            <span className="text-white font-medium text-lg">Spendly</span>
+            <span className="text-white font-medium text-lg">Trace</span>
           </div>
         </header>
 
@@ -152,24 +151,22 @@ export function ChatPage() {
             >
               {/* Logo Icon */}
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-lg">
-                <SpendlyIcon className="w-10 h-10 text-[#1a2332]" />
+                <TraceIcon className="w-12 h-12 text-[#1a2332]" />
               </div>
 
               {/* Greeting */}
-              <h2 className="text-[#6b9fff] text-2xl font-medium mb-2">
-                Hi, there
+              <h2 className="text-[#a1aace] text-2xl font-medium mb-2">
+                Good Morning, Adham!
               </h2>
               <h1 className="text-white text-3xl sm:text-3xl font-semibold mb-4">
-                Can I help you with anything?
+                How may I assist you today?
               </h1>
 
               {/* Subtitle */}
-              <p className="text-gray-400 text-xs max-w-md leading-relaxed">
-                Ready to assist you with anything you need?
+              <p className="text-[#a1aace] text-xs max-w-md leading-relaxed">
+                Ready to assist you with anything you need regarding your spendings.
                 <br />
-                From answering questions, generation to providing
-                <br />
-                recommendations. Let's get started!
+                From answering questions, to providing recommendations.
               </p>
             </motion.div>
           )}

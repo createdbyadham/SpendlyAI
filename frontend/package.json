@@ -1,8 +1,8 @@
 {
-  "name": "spendlyai",
+  "name": "Trace",
   "version": "1.0.0",
   "main": "./dist-electron/main.js",
-  "description": "SpendlyAI - AI-powered financial assistant",
+  "description": "Trace - AI-powered financial assistant",
   "author": "Adham Ehab",
   "private": true,
   "engines": {

@@ -268,8 +268,7 @@ export function PlaceholdersAndVanishInput({
   return (
     <form
       className={cn(
-        "w-full relative max-w-xl mx-auto bg-zinc-800/70 backdrop-blur-sm h-12 rounded-full overflow-hidden shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.1),_0px_1px_0px_0px_rgba(25,28,33,0.02),_0px_0px_0px_1px_rgba(25,28,33,0.08)] transition duration-200",
-        value && "bg-zinc-800/80"
+        "w-full relative max-w-xl mx-auto bg-[#262e3a] h-12 rounded-full overflow-hidden shadow-lg border border-white/10 transition duration-200"
       )}
       onSubmit={handleSubmit}
     >
@@ -284,7 +283,7 @@ export function PlaceholdersAndVanishInput({
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        className="absolute left-2 top-1/2 z-[60] -translate-y-1/2 h-8 w-8 rounded-full bg-zinc-700/50 hover:bg-zinc-600/50 transition duration-200 flex items-center justify-center cursor-pointer"
+        className="absolute left-2 top-1/2 z-[60] -translate-y-1/2 h-8 w-8 text-zinc-400 hover:text-zinc-100 transition duration-200 flex items-center justify-center cursor-pointer"
         disabled={scanMutation.isPending}
       >
         {scanMutation.isPending ? (
@@ -300,7 +299,7 @@ export function PlaceholdersAndVanishInput({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="text-gray-300 h-4 w-4"
+            className="h-4 w-4"
           >
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" />
             <line x1="16" y1="5" x2="22" y2="5" />
@@ -336,7 +335,7 @@ export function PlaceholdersAndVanishInput({
         spellCheck="false"
         data-form-type="other"
         className={cn(
-          "w-full relative text-sm sm:text-base z-50 border-none text-white bg-transparent h-full rounded-full focus:outline-none focus:ring-0 pl-12 sm:pl-16 pr-20",
+          "w-full relative text-sm sm:text-base z-50 border-none text-zinc-200 bg-transparent h-full rounded-full focus:outline-none focus:ring-0 pl-12 pr-20 placeholder:text-zinc-500",
           animating && "text-transparent"
         )}
       />
@@ -344,7 +343,10 @@ export function PlaceholdersAndVanishInput({
       <button
         disabled={!value}
         type="submit"
-        className="absolute right-2 top-1/2 z-50 -translate-y-1/2 h-8 w-8 rounded-full disabled:bg-zinc-700/50 bg-blue-500 transition duration-200 flex items-center justify-center"
+        className={cn(
+          "absolute right-2 top-1/2 z-50 -translate-y-1/2 h-8 w-8 rounded-full transition duration-200 flex items-center justify-center",
+          value ? "bg-white text-black" : "bg-zinc-700/50 text-zinc-400"
+        )}
       >
         <motion.svg
           xmlns="http://www.w3.org/2000/svg"
@@ -356,7 +358,7 @@ export function PlaceholdersAndVanishInput({
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-gray-300 h-4 w-4"
+          className="h-4 w-4"
         >
           <path stroke="none" d="M0 0h24v24H0z" fill="none" />
           <motion.path
@@ -399,7 +401,7 @@ export function PlaceholdersAndVanishInput({
                 duration: 0.3,
                 ease: "linear",
               }}
-              className="dark:text-zinc-500 text-sm sm:text-base font-normal text-neutral-500 pl-12 sm:pl-16 text-left w-[calc(100%-2rem)] truncate pointer-events-none"
+              className="text-zinc-500 text-sm sm:text-base font-normal pl-12 text-left w-[calc(100%-2rem)] truncate pointer-events-none"
             >
               {placeholders[currentPlaceholder]}
             </motion.p>

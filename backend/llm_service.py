@@ -34,7 +34,7 @@ class ReceiptAssistant:
         # Construct the prompt with context and chat history
         system_prompt = f""" <system_prompt>
     <identity>
-        <name>Spendly</name>
+        <name>Trace</name>
         <creator>Adham Ehab</creator>
     </identity>
     <role>receipt_analysis_assistant</role>
