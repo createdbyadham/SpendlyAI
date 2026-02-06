@@ -28,6 +28,15 @@ const TraceIcon = ({ className = "" }: { className?: string }) => (
   <img src={Logo} alt="Trace Logo" className={className} />
 );
 
+// Placeholders for the input
+const placeholders = [
+  "How much did I spend on groceries last month?",
+  "Show me all my coffee purchases",
+  "Which store do I spend the most at?",
+  "What was my most expensive purchase?",
+  "Breakdown my spending by category",
+];
+
 export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -49,13 +58,6 @@ export function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  const placeholders = [
-    "How much did I spend on groceries last month?",
-    "Show me all my coffee purchases",
-    "Which store do I spend the most at?",
-    "What was my most expensive purchase?",
-    "Breakdown my spending by category",
-  ];
 
   const handleChange = () => {
     // Handle input change if needed
