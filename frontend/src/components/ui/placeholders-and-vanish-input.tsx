@@ -249,7 +249,7 @@ export function PlaceholdersAndVanishInput({
     try {
       // Fast OCR-only scan — no LLM, returns text + bounding boxes
       const scanResult = await scanMutation.mutateAsync(file);
-      
+
       if (onReceiptScanned) {
         // Hand off to parent: shows animation + fires LLM parse in parallel
         onReceiptScanned(imageUrl, scanResult);
@@ -273,14 +273,14 @@ export function PlaceholdersAndVanishInput({
       )}
       onSubmit={handleSubmit}
     >
-      <input 
+      <input
         type="file"
         ref={fileInputRef}
         onChange={handleFileUpload}
         accept="image/*"
         className="hidden"
       />
-      
+
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
