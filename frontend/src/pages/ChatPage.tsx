@@ -2,11 +2,13 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { PlaceholdersAndVanishInput } from "../components/ui/placeholders-and-vanish-input";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useChatMutation } from "../api/chat";
 import { cn } from "@/lib/utils";
 import { TextEffect } from "../components/TextEffect";
 import { MeshGradient } from "../components/MeshGradient";
+import { ReceiptScanOverlay } from "../components/ReceiptScanOverlay";
+import type { OCRResponse } from "@/api/ocr";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -16,10 +18,16 @@ interface Message {
   role: 'user' | 'assistant';
 }
 
+interface ScanState {
+  imageUrl: string;
+  ocrResult: OCRResponse;
+}
+
 export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [scanState, setScanState] = useState<ScanState | null>(null);
   const chatMutation = useChatMutation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -43,6 +51,39 @@ export function ChatPage() {
   const handleChange = () => {
     // Handle input change if needed
   };
+
+  // Called by PlaceholdersAndVanishInput after OCR completes — shows the scanning overlay
+  const handleReceiptScanned = useCallback((imageUrl: string, ocrResult: OCRResponse) => {
+    setScanState({ imageUrl, ocrResult });
+  }, []);
+
+  // Called when the scan overlay animation finishes — submits OCR data to chat
+  const handleScanComplete = useCallback(async () => {
+    if (!scanState) return;
+    const { imageUrl, ocrResult } = scanState;
+
+    // Clean up the object URL
+    URL.revokeObjectURL(imageUrl);
+    setScanState(null);
+
+    // Now submit the OCR data to the chat flow
+    const userMessage = { content: "Uploaded a receipt for processing", role: 'user' as const };
+    setMessages(prev => [...prev, userMessage]);
+
+    if (!isExpanded) {
+      setIsExpanded(true);
+    }
+
+    try {
+      setIsTyping(true);
+      const response = await chatMutation.mutateAsync(JSON.stringify(ocrResult));
+      setMessages(prev => [...prev, { content: response.response, role: 'assistant' }]);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    } finally {
+      setIsTyping(false);
+    }
+  }, [scanState, isExpanded, chatMutation]);
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -186,9 +227,21 @@ export function ChatPage() {
                 placeholders={placeholders}
                 onChange={handleChange}
                 onSubmit={onSubmit}
+                onReceiptScanned={handleReceiptScanned}
               />
             </div>
           </div>
+
+          {/* Receipt scanning overlay */}
+          {scanState && (
+            <ReceiptScanOverlay
+              imageUrl={scanState.imageUrl}
+              textRegions={scanState.ocrResult.ocr_regions.text_regions}
+              imageWidth={scanState.ocrResult.ocr_regions.image_width}
+              imageHeight={scanState.ocrResult.ocr_regions.image_height}
+              onComplete={handleScanComplete}
+            />
+          )}
       </div>
     </>
   );

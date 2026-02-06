@@ -5,8 +5,11 @@ import instructor
 from openai import OpenAI
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
+from dataclasses import dataclass, field as dc_field
+from PIL import Image
 import logging
 import re
+import json
 
 # Define the Pydantic models for the receipt with validation
 class ReceiptItem(BaseModel):
@@ -50,6 +53,41 @@ class ReceiptData(BaseModel):
                 return None
         return v
 
+@dataclass
+class TextRegion:
+    """A single detected text region with its bounding box."""
+    text: str
+    confidence: float
+    # Bounding box as [x_min, y_min, x_max, y_max]
+    box: List[int] = dc_field(default_factory=list)
+    # 4-corner polygon as [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+    polygon: List[List[int]] = dc_field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "text": self.text,
+            "confidence": round(self.confidence, 4),
+            "box": self.box,
+            "polygon": self.polygon,
+        }
+
+@dataclass
+class OCRResult:
+    """Full OCR result with text, regions, and image metadata."""
+    raw_text: str
+    text_regions: List[TextRegion] = dc_field(default_factory=list)
+    image_width: int = 0
+    image_height: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            "raw_text": self.raw_text,
+            "text_regions": [r.to_dict() for r in self.text_regions],
+            "image_width": self.image_width,
+            "image_height": self.image_height,
+        }
+
+
 class OCRService:
     def __init__(self):
         # Initialize PaddleOCR following 3.x documentation
@@ -87,10 +125,19 @@ class OCRService:
             return ".bmp"
         return ".jpg"  # default fallback
 
-    def extract_text_from_bytes(self, image_bytes: bytes) -> str:
+    def _get_result_data(self, res_json: dict) -> dict:
+        """Extract the inner result dict, handling both flat and nested structures."""
+        if isinstance(res_json, str):
+            res_json = json.loads(res_json)
+        if isinstance(res_json, dict) and 'res' in res_json and isinstance(res_json['res'], dict):
+            return res_json['res']
+        return res_json if isinstance(res_json, dict) else {}
+
+    def extract_text_from_bytes(self, image_bytes: bytes) -> OCRResult:
+        """Run OCR and return text + bounding boxes + image dimensions."""
         if not image_bytes:
             logging.warning("Empty image bytes received")
-            return ""
+            return OCRResult(raw_text="")
         
         # Detect actual image format for correct temp file extension
         suffix = self._detect_image_suffix(image_bytes)
@@ -102,35 +149,60 @@ class OCRService:
             with os.fdopen(fd, 'wb') as temp_file:
                 temp_file.write(image_bytes)
             
-            logging.info(f"Processing image at {temp_file_path}")
+            # Get image dimensions
+            with Image.open(temp_file_path) as img:
+                img_width, img_height = img.size
+            
+            logging.info(f"Processing image {img_width}x{img_height} at {temp_file_path}")
             
             # Use predict() method per PaddleOCR 3.x docs
             result = self.ocr.predict(temp_file_path)
             
             all_text_lines = []
+            text_regions = []
             
             for res in result:
-                # The result object has a .json property returning a dict
-                res_json = res.json
+                data = self._get_result_data(res.json)
                 
-                # Handle string JSON (parse it if needed)
-                if isinstance(res_json, str):
-                    import json
-                    res_json = json.loads(res_json)
+                rec_texts = data.get('rec_texts', [])
+                rec_scores = data.get('rec_scores', [])
+                rec_boxes = data.get('rec_boxes', [])
+                rec_polys = data.get('rec_polys', [])
                 
-                # Find rec_texts - may be at top level or nested under 'res' key
-                rec_texts = []
-                if isinstance(res_json, dict):
-                    if 'rec_texts' in res_json:
-                        rec_texts = res_json['rec_texts']
-                    elif 'res' in res_json and isinstance(res_json['res'], dict):
-                        rec_texts = res_json['res'].get('rec_texts', [])
+                # Convert numpy arrays to plain lists if needed
+                if hasattr(rec_scores, 'tolist'):
+                    rec_scores = rec_scores.tolist()
+                if hasattr(rec_boxes, 'tolist'):
+                    rec_boxes = rec_boxes.tolist()
+                if hasattr(rec_polys, 'tolist'):
+                    rec_polys = rec_polys.tolist()
                 
-                all_text_lines.extend(rec_texts)
+                for i, text in enumerate(rec_texts):
+                    score = rec_scores[i] if i < len(rec_scores) else 0.0
+                    box = rec_boxes[i] if i < len(rec_boxes) else []
+                    poly = rec_polys[i] if i < len(rec_polys) else []
+                    
+                    # Convert box values to plain ints
+                    box = [int(v) for v in box] if box else []
+                    poly = [[int(v) for v in pt] for pt in poly] if poly else []
+                    
+                    all_text_lines.append(text)
+                    text_regions.append(TextRegion(
+                        text=text,
+                        confidence=float(score),
+                        box=box,
+                        polygon=poly,
+                    ))
                 
             raw_text = "\n".join(all_text_lines)
-            logging.info(f"Extracted {len(all_text_lines)} lines total, {len(raw_text)} chars")
-            return raw_text
+            logging.info(f"Extracted {len(all_text_lines)} lines, {len(text_regions)} regions")
+            
+            return OCRResult(
+                raw_text=raw_text,
+                text_regions=text_regions,
+                image_width=img_width,
+                image_height=img_height,
+            )
 
         except Exception as e:
             logging.error(f"OCR extraction failed: {e}", exc_info=True)

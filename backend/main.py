@@ -72,14 +72,13 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         # Read the uploaded image file
         image_bytes = await file.read()
         
-        # Run OCR using the ocr_service.py
-        raw_text = ocr_service.extract_text_from_bytes(image_bytes)
+        # Run OCR -- returns OCRResult with text, bounding boxes, and image dimensions
+        ocr_result = ocr_service.extract_text_from_bytes(image_bytes)
         
         # Parse with LLM
-        parsed_data = ocr_service.parse_receipt(raw_text)
+        parsed_data = ocr_service.parse_receipt(ocr_result.raw_text)
         
         # Prepare structured document for ChromaDB (not raw OCR text)
-        # This gives the RAG system clean, searchable content
         merchant_name = parsed_data.merchant if parsed_data.merchant else "Unknown Business"
         date = parsed_data.date if parsed_data.date else "Unknown"
         total = parsed_data.total if parsed_data.total else 0.0
@@ -99,8 +98,7 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         )
         
         # Store in ChromaDB with metadata
-        # Uses "title" key to match rag_service.get_relevant_context() lookups
-        if raw_text and raw_text.strip():
+        if ocr_result.raw_text and ocr_result.raw_text.strip():
             rag_service.collection.add(
                 documents=[structured_doc],
                 metadatas=[{
@@ -120,7 +118,12 @@ async def ocr_endpoint(file: UploadFile = File(...)):
         return JSONResponse(content={
             "status": "success",
             "data": parsed_data.model_dump(),
-            "raw_text": raw_text
+            "raw_text": ocr_result.raw_text,
+            "ocr_regions": {
+                "text_regions": [r.to_dict() for r in ocr_result.text_regions],
+                "image_width": ocr_result.image_width,
+                "image_height": ocr_result.image_height,
+            }
         })
         
     except Exception as e:

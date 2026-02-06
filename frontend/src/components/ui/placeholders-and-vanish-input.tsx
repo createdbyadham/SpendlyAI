@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useOCRMutation } from "@/api/ocr";
+import { useOCRMutation, type OCRResponse } from "@/api/ocr";
 import { Spinner } from "./spinner";
 
 interface PixelData {
@@ -17,10 +17,12 @@ export function PlaceholdersAndVanishInput({
   placeholders,
   onChange,
   onSubmit,
+  onReceiptScanned,
 }: {
   placeholders: string[];
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  onReceiptScanned?: (imageUrl: string, ocrResult: OCRResponse) => void;
 }) {
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -241,24 +243,33 @@ export function PlaceholdersAndVanishInput({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Create a preview URL for the scanning animation
+    const imageUrl = URL.createObjectURL(file);
+
     try {
       const result = await ocrMutation.mutateAsync(file);
       
-      // Add a hidden input to the form with the OCR data
-      const hiddenInput = document.createElement('input');
-      hiddenInput.type = 'hidden';
-      hiddenInput.name = 'ocr_data';
-      hiddenInput.value = JSON.stringify(result);
-      e.target.form?.appendChild(hiddenInput);
-      
-      // Submit the form
-      e.target.form?.requestSubmit();
-      
-      // Clean up the hidden input
-      setTimeout(() => hiddenInput.remove(), 100);
+      if (onReceiptScanned) {
+        // Let the parent handle the scanning overlay + form submission
+        onReceiptScanned(imageUrl, result);
+      } else {
+        // Fallback: submit directly (old behavior)
+        URL.revokeObjectURL(imageUrl);
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'ocr_data';
+        hiddenInput.value = JSON.stringify(result);
+        e.target.form?.appendChild(hiddenInput);
+        e.target.form?.requestSubmit();
+        setTimeout(() => hiddenInput.remove(), 100);
+      }
     } catch (error) {
+      URL.revokeObjectURL(imageUrl);
       console.error('Failed to process receipt:', error);
     }
+
+    // Reset file input so the same file can be re-selected
+    e.target.value = '';
   };
 
   return (
