@@ -66,29 +66,47 @@ class StoreReceiptRequest(BaseModel):
     items: list[dict]
     raw_text: str
 
-@app.post("/ocr/")
-async def ocr_endpoint(file: UploadFile = File(...)):
+class ParseReceiptRequest(BaseModel):
+    raw_text: str
+
+# Step 1: Fast OCR-only — returns text + bounding boxes for the scanning animation
+@app.post("/ocr/scan")
+async def ocr_scan_endpoint(file: UploadFile = File(...)):
     try:
-        # Read the uploaded image file
         image_bytes = await file.read()
-        
-        # Run OCR -- returns OCRResult with text, bounding boxes, and image dimensions
         ocr_result = ocr_service.extract_text_from_bytes(image_bytes)
-        
-        # Parse with LLM
-        parsed_data = ocr_service.parse_receipt(ocr_result.raw_text)
-        
-        # Prepare structured document for ChromaDB (not raw OCR text)
+
+        return JSONResponse(content={
+            "status": "success",
+            "raw_text": ocr_result.raw_text,
+            "ocr_regions": {
+                "text_regions": [r.to_dict() for r in ocr_result.text_regions],
+                "image_width": ocr_result.image_width,
+                "image_height": ocr_result.image_height,
+            }
+        })
+
+    except Exception as e:
+        logging.error(f"Error scanning receipt: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Step 2: LLM parse + ChromaDB storage — called in parallel with the animation
+@app.post("/ocr/parse")
+async def ocr_parse_endpoint(request: ParseReceiptRequest):
+    try:
+        parsed_data = ocr_service.parse_receipt(request.raw_text)
+
+        # Prepare structured document for ChromaDB
         merchant_name = parsed_data.merchant if parsed_data.merchant else "Unknown Business"
         date = parsed_data.date if parsed_data.date else "Unknown"
         total = parsed_data.total if parsed_data.total else 0.0
         tax = parsed_data.tax if parsed_data.tax else 0.0
-        
+
         items_text = "\n".join(
             [f"- {item.desc}: ${item.price:.2f} (qty: {item.qty})"
              for item in parsed_data.items]
         ) if parsed_data.items else "No items extracted"
-        
+
         structured_doc = (
             f"Receipt from: {merchant_name}\n"
             f"Date: {date}\n"
@@ -96,9 +114,9 @@ async def ocr_endpoint(file: UploadFile = File(...)):
             f"Tax: ${tax:.2f}\n\n"
             f"Items:\n{items_text}"
         )
-        
+
         # Store in ChromaDB with metadata
-        if ocr_result.raw_text and ocr_result.raw_text.strip():
+        if request.raw_text and request.raw_text.strip():
             rag_service.collection.add(
                 documents=[structured_doc],
                 metadatas=[{
@@ -114,20 +132,14 @@ async def ocr_endpoint(file: UploadFile = File(...)):
             )
         else:
             logging.warning("Skipping RAG storage for receipt with empty text")
-        
+
         return JSONResponse(content={
             "status": "success",
             "data": parsed_data.model_dump(),
-            "raw_text": ocr_result.raw_text,
-            "ocr_regions": {
-                "text_regions": [r.to_dict() for r in ocr_result.text_regions],
-                "image_width": ocr_result.image_width,
-                "image_height": ocr_result.image_height,
-            }
         })
-        
+
     except Exception as e:
-        logging.error(f"Error processing receipt: {str(e)}")
+        logging.error(f"Error parsing receipt: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ai/chat", response_model=ReceiptChatResponse)

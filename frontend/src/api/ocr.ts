@@ -29,31 +29,53 @@ export interface ReceiptData {
   items: ReceiptItem[];
 }
 
-export interface OCRResponse {
+/** Response from /ocr/scan — fast OCR-only, no LLM */
+export interface ScanResponse {
   status: string;
-  data: ReceiptData;
   raw_text: string;
   ocr_regions: OCRRegions;
 }
 
-export const uploadReceipt = async (file: File): Promise<OCRResponse> => {
+/** Response from /ocr/parse — LLM parsing + ChromaDB storage */
+export interface ParseResponse {
+  status: string;
+  data: ReceiptData;
+}
+
+/** Step 1: Fast OCR scan — returns text + bounding boxes */
+export const scanReceipt = async (file: File): Promise<ScanResponse> => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch('http://localhost:8000/ocr/', {
+  const response = await fetch('http://localhost:8000/ocr/scan', {
     method: 'POST',
     body: formData,
   });
 
   if (!response.ok) {
-    throw new Error('Failed to process receipt');
+    throw new Error('Failed to scan receipt');
   }
 
   return response.json();
 };
 
-export const useOCRMutation = () => {
+/** Step 2: LLM parse — sends raw_text, returns structured data */
+export const parseReceipt = async (rawText: string): Promise<ParseResponse> => {
+  const response = await fetch('http://localhost:8000/ocr/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw_text: rawText }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to parse receipt');
+  }
+
+  return response.json();
+};
+
+export const useScanMutation = () => {
   return useMutation({
-    mutationFn: uploadReceipt,
+    mutationFn: scanReceipt,
   });
 };

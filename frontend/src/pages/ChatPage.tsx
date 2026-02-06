@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { TextEffect } from "../components/TextEffect";
 import { MeshGradient } from "../components/MeshGradient";
 import { ReceiptScanOverlay } from "../components/ReceiptScanOverlay";
-import type { OCRResponse } from "@/api/ocr";
+import { parseReceipt, type ScanResponse, type ParseResponse } from "@/api/ocr";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -20,7 +20,7 @@ interface Message {
 
 interface ScanState {
   imageUrl: string;
-  ocrResult: OCRResponse;
+  scanResult: ScanResponse;
 }
 
 export function ChatPage() {
@@ -30,6 +30,10 @@ export function ChatPage() {
   const [scanState, setScanState] = useState<ScanState | null>(null);
   const chatMutation = useChatMutation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Ref to hold the LLM parse promise that runs in parallel with the animation
+  const parsePromiseRef = useRef<Promise<ParseResponse> | null>(null);
+  const animationDoneRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,34 +56,43 @@ export function ChatPage() {
     // Handle input change if needed
   };
 
-  // Called by PlaceholdersAndVanishInput after OCR completes — shows the scanning overlay
-  const handleReceiptScanned = useCallback((imageUrl: string, ocrResult: OCRResponse) => {
-    setScanState({ imageUrl, ocrResult });
+  // Called after the fast OCR scan completes — shows overlay AND fires LLM parse in parallel
+  const handleReceiptScanned = useCallback((imageUrl: string, scanResult: ScanResponse) => {
+    // 1. Show the scanning animation overlay
+    setScanState({ imageUrl, scanResult });
+    animationDoneRef.current = false;
+
+    // 2. Fire LLM parse in the background (runs while animation plays)
+    parsePromiseRef.current = parseReceipt(scanResult.raw_text);
   }, []);
 
-  // Called when the scan overlay animation finishes — submits OCR data to chat
+  // Called when the scan overlay animation finishes
   const handleScanComplete = useCallback(async () => {
     if (!scanState) return;
-    const { imageUrl, ocrResult } = scanState;
+    const { imageUrl } = scanState;
 
-    // Clean up the object URL
+    // Clean up
     URL.revokeObjectURL(imageUrl);
     setScanState(null);
+    animationDoneRef.current = true;
 
-    // Now submit the OCR data to the chat flow
-    const userMessage = { content: "Uploaded a receipt for processing", role: 'user' as const };
-    setMessages(prev => [...prev, userMessage]);
+    // Add user message and expand chat
+    setMessages(prev => [...prev, { content: "Uploaded a receipt for processing", role: 'user' as const }]);
+    if (!isExpanded) setIsExpanded(true);
 
-    if (!isExpanded) {
-      setIsExpanded(true);
-    }
-
+    // Wait for the LLM parse that was already running in parallel
     try {
       setIsTyping(true);
-      const response = await chatMutation.mutateAsync(JSON.stringify(ocrResult));
-      setMessages(prev => [...prev, { content: response.response, role: 'assistant' }]);
+      const parseResult = await parsePromiseRef.current;
+      parsePromiseRef.current = null;
+
+      if (parseResult) {
+        // Send the parsed data to the AI chat
+        const response = await chatMutation.mutateAsync(JSON.stringify(parseResult.data));
+        setMessages(prev => [...prev, { content: response.response, role: 'assistant' }]);
+      }
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('Failed to process receipt:', error);
     } finally {
       setIsTyping(false);
     }
@@ -236,9 +249,9 @@ export function ChatPage() {
           {scanState && (
             <ReceiptScanOverlay
               imageUrl={scanState.imageUrl}
-              textRegions={scanState.ocrResult.ocr_regions.text_regions}
-              imageWidth={scanState.ocrResult.ocr_regions.image_width}
-              imageHeight={scanState.ocrResult.ocr_regions.image_height}
+              textRegions={scanState.scanResult.ocr_regions.text_regions}
+              imageWidth={scanState.scanResult.ocr_regions.image_width}
+              imageHeight={scanState.scanResult.ocr_regions.image_height}
               onComplete={handleScanComplete}
             />
           )}

@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useOCRMutation, type OCRResponse } from "@/api/ocr";
+import { useScanMutation, type ScanResponse } from "@/api/ocr";
 import { Spinner } from "./spinner";
 
 interface PixelData {
@@ -22,7 +22,7 @@ export function PlaceholdersAndVanishInput({
   placeholders: string[];
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
-  onReceiptScanned?: (imageUrl: string, ocrResult: OCRResponse) => void;
+  onReceiptScanned?: (imageUrl: string, scanResult: ScanResponse) => void;
 }) {
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -58,7 +58,7 @@ export function PlaceholdersAndVanishInput({
   const [value, setValue] = useState("");
   const [animating, setAnimating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const ocrMutation = useOCRMutation();
+  const scanMutation = useScanMutation();
 
   const draw = useCallback(() => {
     if (!inputRef.current) return;
@@ -247,25 +247,18 @@ export function PlaceholdersAndVanishInput({
     const imageUrl = URL.createObjectURL(file);
 
     try {
-      const result = await ocrMutation.mutateAsync(file);
+      // Fast OCR-only scan — no LLM, returns text + bounding boxes
+      const scanResult = await scanMutation.mutateAsync(file);
       
       if (onReceiptScanned) {
-        // Let the parent handle the scanning overlay + form submission
-        onReceiptScanned(imageUrl, result);
+        // Hand off to parent: shows animation + fires LLM parse in parallel
+        onReceiptScanned(imageUrl, scanResult);
       } else {
-        // Fallback: submit directly (old behavior)
         URL.revokeObjectURL(imageUrl);
-        const hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'ocr_data';
-        hiddenInput.value = JSON.stringify(result);
-        e.target.form?.appendChild(hiddenInput);
-        e.target.form?.requestSubmit();
-        setTimeout(() => hiddenInput.remove(), 100);
       }
     } catch (error) {
       URL.revokeObjectURL(imageUrl);
-      console.error('Failed to process receipt:', error);
+      console.error('Failed to scan receipt:', error);
     }
 
     // Reset file input so the same file can be re-selected
@@ -292,9 +285,9 @@ export function PlaceholdersAndVanishInput({
         type="button"
         onClick={() => fileInputRef.current?.click()}
         className="absolute left-2 top-1/2 z-[60] -translate-y-1/2 h-8 w-8 rounded-full bg-zinc-700/50 hover:bg-zinc-600/50 transition duration-200 flex items-center justify-center cursor-pointer"
-        disabled={ocrMutation.isPending}
+        disabled={scanMutation.isPending}
       >
-        {ocrMutation.isPending ? (
+        {scanMutation.isPending ? (
           <Spinner size="sm" className="text-gray-300" />
         ) : (
           <motion.svg
