@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
 from dotenv import load_dotenv
 from llm_service import ReceiptAssistant
@@ -54,9 +54,6 @@ app.add_middleware(
 
 class ReceiptChatRequest(BaseModel):
     query: str
-
-class ReceiptChatResponse(BaseModel):
-    response: str
 
 # Model for storing receipts (keeping existing structure for compatibility)
 class StoreReceiptRequest(BaseModel):
@@ -141,13 +138,28 @@ async def ocr_parse_endpoint(request: ParseReceiptRequest):
         logging.error(f"Error parsing receipt: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/ai/chat", response_model=ReceiptChatResponse)
+@app.post("/ai/chat")
 async def receipt_chat(request: ReceiptChatRequest):
-    try:
-        response = await ai.ask(request.query)
-        return {"response": response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    async def event_generator():
+        try:
+            async for token in ai.ask_stream(request.query):
+                # SSE format: each event is "data: <payload>\n\n"
+                yield f"data: {token}\n\n"
+            # Signal the client that the stream is done
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logging.error(f"Streaming error: {str(e)}")
+            yield f"data: [ERROR] {str(e)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 #This endpoint needs to match the new RAG logic
 @app.post("/receipts/store")

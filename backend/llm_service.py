@@ -18,12 +18,11 @@ class ReceiptAssistant:
             api_key=os.environ.get("GITHUB_TOKEN")
         )
         
-    async def ask(self, query):
+    async def ask_stream(self, query):
         """
-        Process a user query using RAG:
-        1. Get relevant context using RAGService
-        2. Construct a prompt with context and query
-        3. Get response from LLM
+        Process a user query using RAG and stream the response token by token.
+        Yields content chunks as they arrive from the LLM.
+        After streaming completes, the full response is saved to memory.
         """
         # Get relevant context from RAG service
         context = await self.rag_service.get_relevant_context(query)
@@ -60,8 +59,8 @@ class ReceiptAssistant:
         # Add user message to memory
         memory.add_user_message(query)
 
-        # Get response from OpenAI with GitHub configuration
-        response = self.client.chat.completions.create(
+        # Stream response from OpenAI with GitHub configuration
+        stream = self.client.chat.completions.create(
             messages=[
                 {
                     "role": "system",
@@ -74,12 +73,16 @@ class ReceiptAssistant:
             ],
             model="openai/gpt-4.1",
             temperature=0.7,
-            top_p=1.0
+            top_p=1.0,
+            stream=True,
         )
-        
-        ai_response = response.choices[0].message.content
-        
-        # Add AI response to memory
-        memory.add_ai_message(ai_response)
-        
-        return ai_response
+
+        full_response = ""
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                full_response += token
+                yield token
+
+        # Save the complete response to memory after streaming finishes
+        memory.add_ai_message(full_response)

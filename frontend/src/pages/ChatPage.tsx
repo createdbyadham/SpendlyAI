@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { PlaceholdersAndVanishInput } from "../components/ui/placeholders-and-vanish-input";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useChatMutation } from "../api/chat";
+import { streamChat } from "../api/chat";
 import { cn } from "@/lib/utils";
 import { MeshGradient } from "../components/MeshGradient";
 import { ReceiptScanOverlay } from "../components/ReceiptScanOverlay";
@@ -40,9 +40,8 @@ const placeholders = [
 export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [scanState, setScanState] = useState<ScanState | null>(null);
-  const chatMutation = useChatMutation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Ref to hold the LLM parse promise that runs in parallel with the animation
@@ -113,14 +112,37 @@ export function ChatPage() {
       setIsExpanded(true);
     }
 
+    // Add a placeholder assistant message that will be streamed into
+    setMessages(prev => [...prev, { content: '', role: 'assistant' as const }]);
+    setIsStreaming(true);
+
     try {
-      setIsTyping(true);
-      const response = await chatMutation.mutateAsync(ocrData || message);
-      setMessages(prev => [...prev, { content: response.response, role: 'assistant' }]);
+      await streamChat(
+        ocrData || message,
+        // onToken — append each token to the last (assistant) message
+        (token) => {
+          setMessages(prev => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last && last.role === 'assistant') {
+              updated[updated.length - 1] = { ...last, content: last.content + token };
+            }
+            return updated;
+          });
+        },
+        // onDone
+        () => {
+          setIsStreaming(false);
+        },
+        // onError
+        (error) => {
+          console.error('Streaming error:', error);
+          setIsStreaming(false);
+        },
+      );
     } catch (error) {
       console.error('Failed to send message:', error);
-    } finally {
-      setIsTyping(false);
+      setIsStreaming(false);
     }
   };
 
@@ -183,7 +205,7 @@ export function ChatPage() {
                 exit={{ opacity: 0, y: 20 }}
               >
                 <div className="max-w-[46.5%] mx-auto space-y-4">
-                  {messages.map((message, index) => (
+                  {messages.filter(m => m.content.length > 0).map((message, index) => (
                     <motion.div
                       key={index}
                       className={cn(
@@ -229,7 +251,7 @@ export function ChatPage() {
                       </div>
                     </motion.div>
                   ))}
-                  {isTyping && (
+                  {isStreaming && messages[messages.length - 1]?.content === '' && (
                     <motion.div
                       className="flex justify-start"
                       initial={{ opacity: 0, y: 10 }}
