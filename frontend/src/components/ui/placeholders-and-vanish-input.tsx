@@ -6,13 +6,6 @@ import { cn } from "@/lib/utils";
 import { useScanMutation, type ScanResponse } from "@/api/ocr";
 import { Spinner } from "./spinner";
 
-interface PixelData {
-  x: number;
-  y: number;
-  r: number;
-  color: string;
-}
-
 export function PlaceholdersAndVanishInput({
   placeholders,
   onChange,
@@ -37,10 +30,10 @@ export function PlaceholdersAndVanishInput({
 
   const handleVisibilityChange = useCallback(() => {
     if (document.visibilityState !== "visible" && intervalRef.current) {
-      clearInterval(intervalRef.current); // Clear the interval when the tab is not visible
+      clearInterval(intervalRef.current);
       intervalRef.current = null;
     } else if (document.visibilityState === "visible") {
-      startAnimation(); // Restart the interval when the tab becomes visible
+      startAnimation();
     }
   }, [startAnimation]);
 
@@ -56,206 +49,36 @@ export function PlaceholdersAndVanishInput({
     };
   }, [placeholders]);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const newDataRef = useRef<PixelData[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
-  const [animating, setAnimating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scanMutation = useScanMutation();
 
-  const draw = useCallback(() => {
-    if (!inputRef.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = 800;
-    canvas.height = 800;
-    ctx.clearRect(0, 0, 800, 800);
-    const computedStyles = getComputedStyle(inputRef.current);
-
-    const fontSize = parseFloat(computedStyles.getPropertyValue("font-size"));
-    ctx.font = `${fontSize * 2}px ${computedStyles.fontFamily}`;
-    ctx.fillStyle = "#FFF";
-    ctx.fillText(value, 16, 40);
-
-    const imageData = ctx.getImageData(0, 0, 800, 800);
-    const pixelData = imageData.data;
-    const newData: PixelData[] = [];
-
-    for (let t = 0; t < 800; t++) {
-      const i = 4 * t * 800;
-      for (let n = 0; n < 800; n++) {
-        const e = i + 4 * n;
-        if (
-          pixelData[e] !== 0 &&
-          pixelData[e + 1] !== 0 &&
-          pixelData[e + 2] !== 0
-        ) {
-          newData.push({
-            x: n,
-            y: t,
-            r: 1,
-            color: `rgba(${pixelData[e]}, ${pixelData[e + 1]}, ${pixelData[e + 2]}, ${pixelData[e + 3]})`,
-          });
-        }
-      }
-    }
-
-    newDataRef.current = newData.map(({ x, y, color }) => ({
-      x,
-      y,
-      r: 1,
-      color: `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${color[3]})`,
-    }));
-  }, [value]);
-
-  useEffect(() => {
-    draw();
-  }, [value, draw]);
-
-  const animate = (start: number) => {
-    let animationFrameId: number;
-    const safetyTimeout = setTimeout(() => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-      setAnimating(false);
-      setValue("");
-      newDataRef.current = [];
-    }, 3000);
-
-    const animateFrame = (pos: number = 0) => {
-      animationFrameId = requestAnimationFrame(() => {
-        try {
-          const newArr = [];
-          for (let i = 0; i < newDataRef.current.length; i++) {
-            const current = newDataRef.current[i];
-            if (current.x < pos) {
-              newArr.push(current);
-            } else {
-              if (current.r <= 0) {
-                current.r = 0;
-                continue;
-              }
-              current.x += Math.random() > 0.5 ? 1 : -1;
-              current.r -= 0.05 * Math.random();
-              newArr.push(current);
-            }
-          }
-          newDataRef.current = newArr;
-          const ctx = canvasRef.current?.getContext("2d");
-          if (ctx) {
-            ctx.clearRect(pos, 0, 800, 800);
-            newDataRef.current.forEach((t) => {
-              const { x: n, y: i, r: s, color: color } = t;
-              if (n > pos) {
-                ctx.beginPath();
-                ctx.rect(n, i, s, s);
-                ctx.fillStyle = color;
-                ctx.strokeStyle = color;
-                ctx.stroke();
-              }
-            });
-          }
-          if (newDataRef.current.length > 0) {
-            animateFrame(pos - 8);
-          } else {
-            setValue("");
-            setAnimating(false);
-            clearTimeout(safetyTimeout);
-            if (animationFrameId) {
-              cancelAnimationFrame(animationFrameId);
-            }
-          }
-        } catch (error) {
-          console.error('Animation error:', error);
-          setValue("");
-          setAnimating(false);
-          newDataRef.current = [];
-          clearTimeout(safetyTimeout);
-          if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-          }
-        }
-      });
-    };
-    animateFrame(start);
-
-    // Cleanup function
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-      clearTimeout(safetyTimeout);
-    };
-  };
-
-  // Add cleanup for animation state when component unmounts or updates
-  useEffect(() => {
-    return () => {
-      setAnimating(false);
-      setValue("");
-      newDataRef.current = [];
-    };
-  }, []);
-
-  // Add blur handler to reset states
-  const handleBlur = () => {
-    if (animating) {
-      setAnimating(false);
-      setValue("");
-      newDataRef.current = [];
-    }
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !animating) {
-      vanishAndSubmit();
+    if (e.key === "Enter") {
+      // Let the form handle submit
     }
-    // Add Escape key to reset animation state
     if (e.key === "Escape") {
-      setAnimating(false);
       setValue("");
-      newDataRef.current = [];
-    }
-  };
-
-  const vanishAndSubmit = () => {
-    setAnimating(true);
-    draw();
-
-    const value = inputRef.current?.value || "";
-    if (value && inputRef.current) {
-      const maxX = newDataRef.current.reduce(
-        (prev, current) => (current.x > prev ? current.x : prev),
-        0
-      );
-      animate(maxX);
     }
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    vanishAndSubmit();
     if (onSubmit) onSubmit(e);
+    setValue("");
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Create a preview URL for the scanning animation
     const imageUrl = URL.createObjectURL(file);
 
     try {
-      // Fast OCR-only scan — no LLM, returns text + bounding boxes
       const scanResult = await scanMutation.mutateAsync(file);
 
       if (onReceiptScanned) {
-        // Hand off to parent: shows animation + fires LLM parse in parallel
         onReceiptScanned(imageUrl, scanResult);
       } else {
         URL.revokeObjectURL(imageUrl);
@@ -265,7 +88,6 @@ export function PlaceholdersAndVanishInput({
       console.error('Failed to scan receipt:', error);
     }
 
-    // Reset file input so the same file can be re-selected
     e.target.value = '';
   };
 
@@ -314,23 +136,13 @@ export function PlaceholdersAndVanishInput({
         )}
       </button>
 
-      <canvas
-        className={cn(
-          "absolute pointer-events-none text-base transform scale-50 top-[20%] left-12 sm:left-16 origin-top-left filter invert pr-20",
-          !animating ? "opacity-0" : "opacity-100"
-        )}
-        ref={canvasRef}
-      />
       <input
         name="message"
         onChange={(e) => {
-          if (!animating) {
-            setValue(e.target.value);
-            if (onChange) onChange(e);
-          }
+          setValue(e.target.value);
+          if (onChange) onChange(e);
         }}
         onKeyDown={handleKeyDown}
-        onBlur={handleBlur}
         ref={inputRef}
         value={value}
         type="text"
@@ -338,10 +150,7 @@ export function PlaceholdersAndVanishInput({
         autoCorrect="off"
         spellCheck="false"
         data-form-type="other"
-        className={cn(
-          "w-full relative text-sm sm:text-base z-50 border-none text-zinc-200 bg-transparent h-full rounded-full focus:outline-none focus:ring-0 pl-12 pr-20 placeholder:text-zinc-500",
-          animating && "text-transparent"
-        )}
+        className="w-full relative text-sm sm:text-base z-50 border-none text-zinc-200 bg-transparent h-full rounded-full focus:outline-none focus:ring-0 pl-12 pr-20 placeholder:text-zinc-500"
       />
 
       <button
