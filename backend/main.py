@@ -161,39 +161,39 @@ async def receipt_chat(request: ReceiptChatRequest):
         },
     )
 
-#This endpoint needs to match the new RAG logic
+# Store a receipt via the unified RAG service (consistent ID + metadata)
 @app.post("/receipts/store")
 async def store_receipt(receipt: StoreReceiptRequest):
     try:
         logging.info(f"Processing receipt store request for {receipt.title}")
-        # Use RAGService instance
-        collection = rag_service.collection
-        
-        # Format the receipt data into a document
-        receipt_text = f"""
-Receipt from: {receipt.title}
-Date: {receipt.date}
-Total: ${receipt.total:.2f}
 
-Items:
-{chr(10).join([f"- {item.get('name', item.get('desc', 'Item'))}: ${item.get('price', 0)}" for item in receipt.items])}
+        items_text = "\n".join(
+            [f"- {item.get('name', item.get('desc', 'Item'))}: "
+             f"${float(item.get('price', 0)):.2f}"
+             for item in receipt.items]
+        ) or "No items extracted"
 
-Raw OCR Text:
-{receipt.raw_text}
-"""
-        
-        # Store in ChromaDB with metadata
-        collection.add(
-            documents=[receipt_text],
-            metadatas=[{
+        receipt_text = (
+            f"Receipt from: {receipt.title}\n"
+            f"Date: {receipt.date}\n"
+            f"Total: ${receipt.total:.2f}\n\n"
+            f"Items:\n{items_text}"
+        )
+
+        # Use the single entry-point so ID, metadata, BM25 are all consistent
+        rag_service.add_receipt(
+            text=receipt_text,
+            metadata={
+                "source": "manual_store",
                 "title": receipt.title,
                 "date": receipt.date,
                 "total": receipt.total,
-                "timestamp": datetime.now().isoformat()
-            }],
-            ids=[f"receipt_{datetime.now().timestamp()}"]
+                "tax": 0.0,
+                "item_count": len(receipt.items),
+                "timestamp": datetime.now().isoformat(),
+            },
         )
-        
+
         logging.info(f"Successfully stored receipt for {receipt.title}")
         return {"status": "success", "message": "Receipt stored successfully"}
     except ValidationError as e:
