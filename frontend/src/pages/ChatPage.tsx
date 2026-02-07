@@ -128,8 +128,8 @@ export function ChatPage() {
     <>
       <MeshGradient />
       <div className="fixed inset-0 flex flex-col w-full overflow-hidden z-10">
-        {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 flex-shrink-0">
+        {/* Header - fixed to top-left regardless of scroll */}
+        <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
               <TraceIcon className="w-6 h-6 text-[#0d1117]" />
@@ -140,7 +140,7 @@ export function ChatPage() {
 
         {/* Main Content */}
         <div className={cn(
-          "flex flex-col flex-1 h-full px-4",
+          "flex flex-col flex-1 min-h-0 px-4",
           !isExpanded && "justify-center items-center"
         )}>
           {/* Welcome Section - Only shown when not expanded */}
@@ -177,93 +177,95 @@ export function ChatPage() {
           <AnimatePresence>
             {isExpanded && (
               <motion.div
-                className="flex-1 overflow-y-auto min-h-0 mb-4 space-y-4 w-full scroll-smooth"
+                className="flex-1 overflow-y-auto min-h-0 mb-4 w-full scroll-smooth"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
               >
-                {messages.map((message, index) => (
-                  <motion.div
-                    key={index}
-                    className={cn(
-                      "flex",
-                      message.role === 'user' ? "justify-end" : "justify-start"
-                    )}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <div className={cn(
-                      "px-4 py-2 rounded-3xl max-w-[85%] sm:max-w-[75%]",
-                      message.role === 'user'
-                        ? "bg-blue-500 text-white"
-                        : "bg-zinc-800/70 backdrop-blur-sm text-gray-100"
-                    )}>
-                      {message.role === 'assistant' ? (
-                        <div className="prose prose-invert max-w-none text-left">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeRaw]}
-                            components={{
-                              p: ({ ...props }) => <p className="m-0" {...props} />,
-                              ul: ({ ...props }) => <ul className="m-0 pl-4" {...props} />,
-                              ol: ({ ...props }) => <ol className="m-0 pl-4" {...props} />,
-                              li: ({ ...props }) => <li className="my-1" {...props} />,
-                              strong: ({ ...props }) => <strong className="font-bold text-blue-300" {...props} />,
-                              h1: ({ ...props }) => <h1 className="text-xl font-bold my-2" {...props} />,
-                              h2: ({ ...props }) => <h2 className="text-lg font-bold my-2" {...props} />,
-                              h3: ({ ...props }) => <h3 className="text-base font-bold my-1" {...props} />,
-                              code: ({ ...props }) => <code className="bg-black/30 rounded px-1" {...props} />,
-                              table: ({ ...props }) => <table className="border-collapse my-2" {...props} />,
-                              th: ({ ...props }) => <th className="border border-gray-600 px-2 py-1" {...props} />,
-                              td: ({ ...props }) => <td className="border border-gray-600 px-2 py-1" {...props} />
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
-                      ) : (
-                        message.content
+                <div className="max-w-[46.5%] mx-auto space-y-4">
+                  {messages.map((message, index) => (
+                    <motion.div
+                      key={index}
+                      className={cn(
+                        "flex",
+                        message.role === 'user' ? "justify-end" : "justify-start"
                       )}
-                    </div>
-                  </motion.div>
-                ))}
-                {isTyping && (
-                  <motion.div
-                    className="flex justify-start"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                  >
-                    <div className="px-4 py-2 rounded-3xl bg-zinc-800/70 backdrop-blur-sm">
-                      <div className="flex items-center space-x-1">
-                        <motion.div
-                          className="w-1.5 h-1.5 bg-gray-300 rounded-full"
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-                        />
-                        <motion.div
-                          className="w-1.5 h-1.5 bg-gray-300 rounded-full"
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-                        />
-                        <motion.div
-                          className="w-1.5 h-1.5 bg-gray-300 rounded-full"
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-                        />
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className={cn(
+                        "px-4 py-2 rounded-2xl max-w-[85%] sm:max-w-[75%]",
+                        message.role === 'user'
+                          ? "bg-[#2d333d] text-white"
+                          : "bg-[#353f4c] backdrop-blur-sm text-gray-100"
+                      )}>
+                        {message.role === 'assistant' ? (
+                          <div className="prose prose-invert max-w-none text-left">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              rehypePlugins={[rehypeRaw]}
+                              components={{
+                                p: ({ ...props }) => <p className="m-0" {...props} />,
+                                ul: ({ ...props }) => <ul className="m-0 pl-4" {...props} />,
+                                ol: ({ ...props }) => <ol className="m-0 pl-4" {...props} />,
+                                li: ({ ...props }) => <li className="my-1" {...props} />,
+                                strong: ({ ...props }) => <strong className="font-bold text-blue-300" {...props} />,
+                                h1: ({ ...props }) => <h1 className="text-xl font-bold my-2" {...props} />,
+                                h2: ({ ...props }) => <h2 className="text-lg font-bold my-2" {...props} />,
+                                h3: ({ ...props }) => <h3 className="text-base font-bold my-1" {...props} />,
+                                code: ({ ...props }) => <code className="bg-black/30 rounded px-1" {...props} />,
+                                table: ({ ...props }) => <table className="border-collapse my-2" {...props} />,
+                                th: ({ ...props }) => <th className="border border-gray-600 px-2 py-1" {...props} />,
+                                td: ({ ...props }) => <td className="border border-gray-600 px-2 py-1" {...props} />
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          message.content
+                        )}
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-                <div ref={messagesEndRef} />
+                    </motion.div>
+                  ))}
+                  {isTyping && (
+                    <motion.div
+                      className="flex justify-start"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                    >
+                      <div className="px-4 py-2 rounded-3xl bg-zinc-800/70 backdrop-blur-sm">
+                        <div className="flex items-center space-x-1">
+                          <motion.div
+                            className="w-1.5 h-1.5 bg-gray-300 rounded-full"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                          />
+                          <motion.div
+                            className="w-1.5 h-1.5 bg-gray-300 rounded-full"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                          />
+                          <motion.div
+                            className="w-1.5 h-1.5 bg-gray-300 rounded-full"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Input Section */}
           <div className={cn(
-            "w-full max-w-2xl mx-auto flex flex-col items-center gap-4",
+            "w-full max-w-2xl mx-auto flex-shrink-0 flex flex-col items-center gap-4",
             !isExpanded && "w-full"
           )}>
 
