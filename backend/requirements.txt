@@ -15,6 +15,7 @@ langchain==0.3.26
 langchain-community==0.3.26
 langchain-core==0.3.68
 sentence-transformers==5.0.0
+rank_bm25
 
 # Use CPU-only version of PyTorch to reduce size
 --extra-index-url https://download.pytorch.org/whl/cpu

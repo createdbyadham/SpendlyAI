@@ -117,9 +117,9 @@ async def ocr_parse_endpoint(request: ParseReceiptRequest):
 
         # Store in ChromaDB with metadata
         if request.raw_text and request.raw_text.strip():
-            rag_service.collection.add(
-                documents=[structured_doc],
-                metadatas=[{
+            rag_service.add_receipt(
+                text=structured_doc,
+                metadata={
                     "source": "receipt_ocr",
                     "title": merchant_name,
                     "date": date,
@@ -127,8 +127,7 @@ async def ocr_parse_endpoint(request: ParseReceiptRequest):
                     "tax": tax,
                     "item_count": len(parsed_data.items),
                     "timestamp": datetime.now().isoformat()
-                }],
-                ids=[f"receipt_{datetime.now().timestamp()}"]
+                }
             )
         else:
             logging.warning("Skipping RAG storage for receipt with empty text")
@@ -150,6 +149,7 @@ async def receipt_chat(request: ReceiptChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+#This endpoint needs to match the new RAG logic
 @app.post("/receipts/store")
 async def store_receipt(receipt: StoreReceiptRequest):
     try:
